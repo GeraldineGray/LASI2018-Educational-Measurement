@@ -1,6 +1,6 @@
 # LASI2018-Educational-Measurement
 
-Practical work will be done in R, using two data files: Big5.csv and Maths_scored.csv (from TAM package)
+Practical work will be done in R, using two data files: Big5.csv and Maths_scored.csv (from TAM)
 
 The R code is explained in EducationalMeasurement R code.html, along with the output you should expect.
 
