@@ -14,10 +14,17 @@ In an R console, you will need to run the following to download the R packages u
 install.packages("readr") 
 
 install.packages("corrplot") 
+
 install.packages("nFactors") 
+
 install.packages("lavaan") 
+
 install.packages("dplyr")
+
 install.packages("psychometric") 
+
 install.packages("psych") 
+
 install.packages("GPArotation") 
+
 install.packages("TAM") 
