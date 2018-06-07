@@ -12,6 +12,7 @@ R Studio can be downloaded from http://www.rstudio.com/ide/download/. You will n
 In an R console, you will need to run the following to download the R packages used in this workshop:
 
 install.packages("readr") 
+
 install.packages("corrplot") 
 install.packages("nFactors") 
 install.packages("lavaan") 
