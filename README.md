@@ -9,14 +9,14 @@ R can be downloaded from http://cran.r-project.org/bin/windows/base/. Instructio
 
 R Studio can be downloaded from http://www.rstudio.com/ide/download/. You will need to install R before installing R Studio.  
 
-In an R console, you will need to run the following to download the R packages using ini this workshop:
+In an R console, you will need to run the following to download the R packages used in this workshop:
 
-install.packages("readr")
-install.packages("corrplot")
-install.packages("nFactors")
-install.packages("lavaan")
+install.packages("readr") 
+install.packages("corrplot") 
+install.packages("nFactors") 
+install.packages("lavaan") 
 install.packages("dplyr")
-install.packages("psychometric")
-install.packages("psych")
-install.packages("GPArotation")
-install.packages("TAM")
+install.packages("psychometric") 
+install.packages("psych") 
+install.packages("GPArotation") 
+install.packages("TAM") 
