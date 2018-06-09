@@ -1,0 +1,350 @@
+---
+title: "LASI 2018: Educational measurement and the challenges of inferring learning, R code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Section 1: R Setup
+
+This document explains the R code to be used in the workshop, including the code itself and sample outputs.  R is open source.  
+R can be downloaded from http://cran.r-project.org/bin/windows/base/. Instructions on installing R can be found on the website.
+R Studio can be downloaded from http://www.rstudio.com/ide/download/. You will need to install R before installing R Studio.  
+Some functions are available with the base R package, but most are in libraries that need to be downloded and installed individually. There are many R libraries with functions related to psychometric measurement (listed here: https://cran.r-project.org/web/views/Psychometrics.html). 
+The R libraries used in this workshop are listed below. They need to be installed just ONCE, and loaded each time you start a new session in R.  The follow R code (anything in a grey box) can be copied directly into an R console and run.
+
+##### 1.1. *Install.packages* downloads the library to your machine
+```{r installs, results='hide', eval=FALSE}
+#In R, # denotes a comment. 
+#If you get the followng message during an install: "There are binary versions available but the source versions are later....."  , select N to use the last stable version of the package
+
+install.packages("readr")
+install.packages("corrplot")
+install.packages("nFactors")
+install.packages("lavaan")
+install.packages("dplyr")
+install.packages("psychometric")
+install.packages("psych")
+install.packages("GPArotation")
+install.packages("TAM")
+```
+
+##### 1.2 *library* adds the library to the enviornment for the current session
+```{r library loads, message=FALSE, warning=FALSE}
+library(readr)
+library(nFactors)    #should be loaded beofre 'dplyr' as both have a 'select' function which is used below.
+library(dplyr)
+library(corrplot)
+library(lavaan)
+library(psych)
+library(psychometric)
+library(GPArotation)
+library(TAM)
+
+#Note: If you have problems with the 'select' command in the tutorial, run to following:
+#detach("package:MASS",TRUE).  
+
+```
+##### 1.3 Set a working directory
+When loaded or saving datasets, you can either give the full path name to that dataset, or set a working directory as the default path name.   
+1. Create a folder for the workshop (or use an existing folder);  
+2. Copy the two workshop datasets into this folder;  
+<span style="color:red">3. Change the R command below to the full address to your workshop folder.</span>
+
+```{r set working directory}
+setwd("/Users/geraldine/Desktop/LASI2018")
+```
+
+## Section 2: A look at some datasets
+
+#### 2.1. Import a dataset into R
+```{r import datasets, message=FALSE, warning=FALSE}
+ #This dataset has scores from 15 Maths questions for 877 students (from TAM package tutorial)
+mathsData<-read.csv("Math_scored.csv")  #read Maths_scored.csv from the working directory and store in a data frame called mathsData
+
+ #Psychometric dataset: Three dimensions of the Big 5 (Openness, Conscientiousness and Agreeableness) from 491 respondents.
+Big5Data<-read.csv("Big5.csv")  #read Big5.csv from the working directory and store in a data frame called Big5Data
+```
+#### 2.2 SELECT A DATASET  
+All commands from here assume the data is in a dataframe called **myData**. Change the R.H.S of the command below to assign **myData** to the dataset you want to work with.
+```{r select datasets, message=FALSE, warning=FALSE}
+myData <- Big5Data    
+```
+#### 2.3 EXPLORE THE DATASET  
+There are many ways to explore a dataset in R, both via summary statistics and plots. For example:
+```{r initial exploration, message=FALSE, warning=FALSE}
+str(myData)  #lists attributes, their data type and values from the first 10 rows
+
+#Visual inspection: A grid of bar plots for all items:
+op<-par()   #store default plot parameters (to reset later)
+par(mfrow=c(4,5), mar=c(4,2,1,1))			#adjust mfrow for grid size: (rows,colums); mar=margins(b,l,t,r)
+for(i in 1:ncol(myData)){
+count<-table(myData[,i])
+barplot(count, xlab=names(myData)[i])
+}
+par(op)   #reset to default plot parameters
+
+describe(myData) #gives summary statsitics for the dataset
+
+#Check for missing: is.na(x) returns TRUE of x is missing (not available). The answer should be 0.
+#For more information on working with missing values see: https://www.statmethods.net/input/missingdata.html
+sum(is.na(myData))
+
+#A correlation plot. (For more ways to visualise correlations see: https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html))
+correlations<-cor(myData)
+#corrplot(correlations, type="lower")   #L.H.S of diagonal only.
+corrplot.mixed(correlations) 
+
+#Note: the correlation plot shows A1, A2 and A4 are reverse scored. This can be 'fixed' as follows:
+reverseCodes <- c(1,1,1,1,1,1,1,1,1,-1,-1,1,-1,1)  #Create a vector with -1 indicating items to be reversed
+Big5DataR<-as.data.frame(reverse.code(reverseCodes, Big5Data)) #Reversed based on vector above (needed later)
+```
+#####<span style="color:red">Exercise:</span>  
+Set myData to mathsData and run some of the commands above again (myData<-mathsData).
+
+## Section 3: Psychometric measurements
+
+This section will use Big5Data to determine the number of well defined constructs in the dataset.  
+FYI: There is a nice introduction to factor analysis at: http://data.library.virginia.edu/getting-started-with-factor-analysis/
+
+#### 3a.1: Exploratory factor analysis  
+
+```{r Exploratory Factor Analysis, message=FALSE, warning=FALSE}
+
+myData <- Big5Data
+
+### Default rotation is orthogonal (rotation="varimax" => independent factors). For oblique set rotation="promax".
+
+fit <- factanal(myData, 3, rotation="varimax")  #This is Base R. 'fa' in Library 'psych' has more options.
+print(fit, digits=2, cutoff=.3)
+```
+
+As can be seen in the output above, chi square statistic rejects the null hypothesis of 3 factors. The weakest loadings (Factor 3) are for Openness. 
+A scree plot can help inform the number of factors in a dataset as follows:
+
+```{R Exploratory Factor Analysis 2, message=FALSE, warning=FALSE}
+###  Scree plot to estimate number of factors
+ev <- eigen(cor(myData)) # get dataset eigenvalues
+#ev <- eigen(polychoric(myData))
+ap <- parallel(subject=nrow(myData),var=ncol(myData),rep=100,cent=.05) #get eigenvalues of random uncorrelated standardized normal variables.
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+  
+Note: Analysis based on Pearson correlations assumes continuous attributes that are normally distributed.    
+Big5 is ordinal data estimating a continuous latent trait (polychoric correlation) and mathsData items are dichotomous (tetrachoric correlation).  
+The function fa.parrallel generates **scree plots** based a range of types of correlation. The method can give the number of factors based on Factor Analysis (measurement of a latent variable) and the number of components based on Principal Component Analysis (linear combinations of variables). (This link gives a nice explanation of the difference between EFA and PCA: https://www.theanalysisfactor.com/the-fundamental-difference-between-principal-component-analysis-and-factor-analysis/ )
+
+```{r polychoric correlation, message=FALSE, warning=FALSE}
+#fa.parallel(Big5Data,cor="poly", fm="ml", n.iter=10, fa="fa") #parameters: n.iter: number of simulations (default =10); fm: factor method, ml is maximum likelihood factor analysis; fa: choose between EFA and PCA, default is both. sim=FALSE would exclude simulated data.
+
+fa.parallel(mathsData,cor="tet",fm="ml", n.iter=3, fa="fa")
+
+#EFA using tetra- / poly- choric correlation
+#fa(r = myData, nfactors = 3, n.iter = 2, cor = "poly")
+
+```
+
+As an example of a fit that does not reject the null hypothesis, the code below does an EFA for the openness items as two factors.
+```{r Exploratory Factor Analysis 3, message=FALSE, warning=FALSE}
+
+myData <- Big5Data
+
+myData <- myData %>% select(starts_with("O"))   #Select conscientiouess and agreeableness
+fit <- factanal(myData, 2, rotation="varimax")
+print(fit, digits=2, cutoff=.3)
+
+#restore myData to all three factors again
+
+myData <- Big5Data
+```
+
+##### <span style="color:red"> Exercise:</span>  
+Does EFA analysis reject a hypothesis that the dataset contains 5 factors?  
+Do you think this is a reasonable analysis, or is there another explanation?
+  
+***
+##### Exploring factors in the Maths dataset:
+The fa functions in package 'psych' provides more prarameters for factor analysis. The Maths dataset has dichotomous variables, so the following uses tetrochloric correlation:
+
+```{r Exploratory Factor Analysis2, message=FALSE, warning=FALSE}
+myData<-mathsData
+summary(fa(myData,1,cor="tet")) 
+```
+##### <span style="color:red"> Optional exercise:</span>  
+Use the appropriate scree plot to visually explore the number of factors in the Maths dataset. 
+
+#### 3a.2 Confirmatory factor analysis (used to test an underlying theory)
+
+```{r Confirmatory Factor Analysis, message=FALSE, warning=FALSE}
+
+myData <- Big5Data  #could also use Big5DataR
+
+#Define the theoretcial model to be assessed. IN this case: three distinct constructs
+Big5.CFA.model <- 'open  =~ O1 + O2 + O3 + O4 + O5
+               conn =~ C1 + C2 + C3 + C4 
+               agree   =~ A1 + A2 + A3 + A4 + A5'
+
+#Test how well the data fits this model
+fit <- cfa(Big5.CFA.model, data=myData)
+summary(fit, fit.measures=TRUE)
+
+```
+
+## Section 3b: Reliability
+```{r Reliability 1, message=FALSE, warning=FALSE}
+
+#Cronbach Alpha
+#Reverse scored items need to be 'fixed', so this section will use Big5DataR
+myData <- Big5DataR
+
+#Openness 
+dataOpen<-select(myData,starts_with("O"))  
+alphaO<-psych::alpha(dataOpen)   #psych:: denotes package name; psychometric:: also has an aplpha function that returns just a single figure.
+print(alphaO$total, digits=2, cutoff=.3) 
+#Conscientousnesss 
+dataConn<-select(myData,starts_with("C"))
+alphaC<-psych::alpha(dataConn)
+print(alphaC$total, digits=2, cutoff=.3) 
+#Agreeableness 
+dataConn<-select(myData,starts_with("A"))
+alphaA<-psych::alpha(dataConn)
+print(alphaA$total, digits=2, cutoff=.3) 
+```
+########## <span style="color:red"> Exercise:</span>  
+What is the realibility of the Maths dataset as estimated by Cronbach alpha?
+
+
+```{r reliability 2: Omega, message=FALSE, warning=FALSE}
+#Omega - gives alpha, omega & G.6, for an overall factor (g) and individual factors (F1...)
+omega(myData,3)   # 3 factors; principal axis factor analysis (default)
+```
+#####Exercise:
+In the maths datset, does Omega differ from Alpha for a 1-factor model?  
+
+## 3c: Error measurement
+```{r error measurement, message=FALSE, warning=FALSE}
+#1. Add a final total for each student
+mathsDataTotal<-mutate(mathsData, total=rowSums(mathsData)) #creates a new column, total, which is the sum of the other columns
+hist(mathsDataTotal$total)
+myData<-mathsDataTotal
+
+#N, mean, standard devation:
+n<-nrow(myData)  #number of rows
+m<-mean(myData$total)
+s<-sd(myData$total)
+rxx<-0.86 #from Omega estimate above
+
+#Standard error of the mean: how close is the class average to a population average
+se.mean<-s/sqrt(n)
+cat("mean: ", m, "; Standard error of the mean: ", round(se.mean,2)) #cat = concatenate
+ 
+```
+##### <span style="color:red"> Optional exercise:</span>  
+Optional Excercise: What is the standard error for Conscientiousness?
+
+
+##Section 4: Classical Test Theory
+
+```{r CTT, message=FALSE, warning=FALSE}
+
+#1. Simple item difficult
+myData<-mathsData
+itemDifficulty<-colMeans(myData)
+print(itemDifficulty, digits=2)
+
+#2. Item discrimination (relationship with latent trait)
+#Estimated as: (number correct in the top third - number correct in the bottom third ) / size of each group.
+itemDiscrimination<-discrim(myData)
+print(itemDiscrimination, digits=2)
+
+#3. Does a particular difficulty range provide better discrimination?
+plot(itemDiscrimination~itemDifficulty)
+```
+
+
+####Section 4a: Measurement error again
+
+```{r CTT and SEM, message=FALSE, warning=FALSE}
+myData<-mathsDataTotal
+#N, mean, standard devation:
+n<-nrow(myData)  #number of rows
+m<-mean(myData$total)
+s<-sd(myData$total)
+rxx<-0.86 #from Omega estimate above
+
+
+###CI for observed and true scores
+#select the total score for one person (e.g. the code below selects the person in row 1)
+Person1<-mathsDataTotal[1,"total"]  
+
+#Confidence interval for one person's observed score, uses: (SE.Meas<-s*sqrt(1-rxx))
+CI.Person1.obs<-CI.obs(Person1, s, rxx, level = 0.95) #95% confidence interval of observed score
+print(CI.Person1.obs, digits=2) 
+
+#confidence interval for the estimated true score, uses: (SE.Est<-s*sqrt((1-rxx)*rxx))
+CI.Person1.true<-CI.tscore(Person1, m, s, rxx, level = 0.95) #95% confidence interval of observed score
+print(CI.Person1.true, digits=2) 
+```
+
+## Section 5: Item Response Theory
+The following code generates 1PL and 2PL models of the Maths dataset.
+
+#### Rasch Model (1PL)
+```{r Rasch: Explore 1PL part 1, message=FALSE, warning=FALSE, results='hide'}
+myData<-mathsData
+my1PL<-tam.mml(myData)   # or my1PL<-tam.jml(myData)
+my1PL.fit<-tam.fit(my1PL)
+```
+
+
+```{r Rasch: Explore 1PL part 2, message=FALSE, warning=FALSE, eval=FALSE}
+#View ICC plots  
+op<-par()   #store default plot parameters (to reset later)
+par(mfrow=c(5,3), mar=c(1,3,3,2))			#adjust mfrow for grid size: (rows,colums); mar=margins(b,l,t,r)
+plot(my1PL)
+par(op)   #reset to default plot parameters
+```
+
+```{r Rasch: Explore 1PL part 3, message=FALSE, warning=FALSE}
+#Student ability estimates
+theta<-my1PL$person$EAP                  #For mml
+#theta<-my1PL$WLE                        #For jml
+hist(theta)
+
+#Item difficulty estimates
+print(my1PL$xsi, digits=2) 
+
+#residuals
+summary(my1PL.fit)
+```
+### 2PL IRT model
+```{r run 2PL and model fit, mmessage=FALSE, warning=FALSE, results='hide' }
+my2PL<-tam.mml.2pl(myData)
+my2PL.fit<-tam.fit(my2PL)
+```
+
+```{r explore 2PL model part 1, mmessage=FALSE, warning=FALSE }
+summary(my2PL.fit)
+```
+
+```{r explore 2PL model part 2, mmessage=FALSE, warning=FALSE,eval=FALSE}
+#Compare ICC for 1PL and 2PL
+
+op<-par()   #store default plot parameters (to reset later)
+par(mfrow=c(5,3), mar=c(1,3,3,2))			#adjust mfrow for grid size: (rows,colums); mar=margins(b,l,t,r)
+plot(my2PL)
+par(op)   #reset to default plot parameters
+
+
+```
+
+
+##### Other useful commands
+```{r appendix, mmessage=FALSE, warning=FALSE,eval=FALSE}
+rm(list=ls())   #clear the environment
+search()      #shows the order in which packages are searched for a function. 
+
+```
